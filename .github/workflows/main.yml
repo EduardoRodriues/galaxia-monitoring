@@ -22,9 +22,31 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Ensure PR is targeting the correct branch
+      run: |
+        if [[ "${{ github.event.pull_request.base.ref }}" != "develop" ]]; then
+          echo "This PR must target the 'develop' branch."
+          exit 1
+        fi
+
     - name: Merge PR if approved
-      if: steps.approval.outputs.approvals >= 1
+      if: steps.approval.outputs.approvals >= 2  # Alterado para pelo menos 2 aprovações
       run: |
         gh pr merge ${{ github.event.pull_request.number }} --squash --delete-branch --repo ${{ github.repository }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Notify on Slack
+      if: steps.approval.outputs.approvals >= 2
+      uses: 8398a7/action-slack@v3
+      with:
+        status: good
+        fields: '[{"title":"Pull Request Merged","value":"PR #${{ github.event.pull_request.number }} has been merged.","short":false}]'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Handle Merge Errors
+      if: failure()
+      run: |
+        echo "There was an error merging the pull request."
+        exit 1
